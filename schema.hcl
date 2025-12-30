@@ -77,6 +77,10 @@ table "keywords" {
     null = false
     type = text
   }
+  column "description" {
+    null = true
+    type = text
+  }
   column "category" {
     null = true
     type = text
