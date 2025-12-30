@@ -1,3 +1,4 @@
+# Schema for the app database
 schema "public" {}
 
 table "mentions" {
