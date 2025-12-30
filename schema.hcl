@@ -85,3 +85,32 @@ table "products" {
     columns = [column.name]
   }
 }
+
+table "categories" {
+  schema = schema.public
+  column "id" {
+    type = serial
+  }
+  column "name" {
+    type = varchar(100)
+  }
+  column "slug" {
+    type = varchar(100)
+  }
+  column "parent_id" {
+    type = int
+    null = true
+  }
+  primary_key {
+    columns = [column.id]
+  }
+  foreign_key "fk_categories_parent" {
+    columns     = [column.parent_id]
+    ref_columns = [column.id]
+    on_delete   = SET_NULL
+  }
+  index "idx_categories_slug" {
+    columns = [column.slug]
+    unique  = true
+  }
+}
