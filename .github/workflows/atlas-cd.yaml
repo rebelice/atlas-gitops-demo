@@ -21,13 +21,13 @@ jobs:
       - name: Approve Plan
         uses: ariga/atlas-action/schema/plan/approve@v1
         with:
-          config: atlas.hcl
+          config: file://atlas.hcl
           env: ci
           dev-url: "docker://postgres/15/dev?search_path=public"
 
       - name: Push Schema
         uses: ariga/atlas-action/schema/push@v1
         with:
-          config: atlas.hcl
+          config: file://atlas.hcl
           env: ci
           dev-url: "docker://postgres/15/dev?search_path=public"
