@@ -114,3 +114,36 @@ table "categories" {
     unique  = true
   }
 }
+
+table "inventory" {
+  schema = schema.public
+  column "id" {
+    type = serial
+  }
+  column "product_id" {
+    type = int
+  }
+  column "warehouse" {
+    type = varchar(100)
+  }
+  column "quantity" {
+    type    = int
+    default = 0
+  }
+  column "updated_at" {
+    type    = timestamptz
+    default = sql("now()")
+  }
+  primary_key {
+    columns = [column.id]
+  }
+  foreign_key "fk_inventory_product" {
+    columns     = [column.product_id]
+    ref_columns = [table.products.column.id]
+    on_delete   = CASCADE
+  }
+  index "idx_inventory_product_warehouse" {
+    columns = [column.product_id, column.warehouse]
+    unique  = true
+  }
+}
