@@ -1,0 +1,28 @@
+name: Atlas CI
+on:
+  pull_request:
+    paths:
+      - 'schema.hcl'
+      - 'atlas.hcl'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Atlas
+        uses: ariga/setup-atlas@v0
+        with:
+          cloud-token: ${{ secrets.ATLAS_CLOUD_TOKEN }}
+
+      - name: Schema Plan
+        uses: ariga/atlas-action/schema/plan@v1
+        with:
+          config: atlas.hcl
+          env: ci
+          dev-url: "docker://postgres/15/dev?search_path=public"
