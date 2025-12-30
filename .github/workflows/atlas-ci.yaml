@@ -22,6 +22,8 @@ jobs:
 
       - name: Schema Plan
         uses: ariga/atlas-action/schema/plan@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           config: file://atlas.hcl
           env: ci
