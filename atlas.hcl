@@ -30,10 +30,10 @@ env "ci" {
 
 env "prod" {
   url = var.db_url
-  src = "file://schema.hcl"
   dev = "docker://postgres/15/dev?search_path=public"
 
   schema {
+    src = "file://schema.hcl"
     repo {
       name = "app"
     }
