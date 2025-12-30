@@ -1,231 +1,67 @@
 schema "public" {}
 
-table "users" {
+table "mentions" {
   schema = schema.public
   column "id" {
-    type = serial
-  }
-  column "name" {
-    type = varchar(255)
-  }
-  column "email" {
-    type = varchar(255)
-  }
-  column "created_at" {
-    type    = timestamptz
-    default = sql("now()")
-  }
-  primary_key {
-    columns = [column.id]
-  }
-  index "idx_users_email" {
-    columns = [column.email]
-    unique  = true
-  }
-}
-
-table "orders" {
-  schema = schema.public
-  column "id" {
-    type = serial
-  }
-  column "user_id" {
-    type = int
-  }
-  column "total" {
-    type = decimal(10, 2)
-  }
-  column "status" {
-    type    = varchar(50)
-    default = "pending"
-  }
-  column "created_at" {
-    type    = timestamptz
-    default = sql("now()")
-  }
-  primary_key {
-    columns = [column.id]
-  }
-  foreign_key "fk_orders_user" {
-    columns     = [column.user_id]
-    ref_columns = [table.users.column.id]
-    on_delete   = CASCADE
-  }
-  index "idx_orders_user_id" {
-    columns = [column.user_id]
-  }
-}
-
-table "products" {
-  schema = schema.public
-  column "id" {
-    type = serial
-  }
-  column "name" {
-    type = varchar(255)
-  }
-  column "description" {
+    null = false
     type = text
   }
-  column "price" {
-    type = decimal(10, 2)
+  column "source" {
+    null = false
+    type = text
   }
-  column "stock" {
-    type    = int
-    default = 0
+  column "type" {
+    null = false
+    type = text
   }
-  column "created_at" {
-    type    = timestamptz
-    default = sql("now()")
+  column "keyword" {
+    null = false
+    type = text
   }
-  primary_key {
-    columns = [column.id]
+  column "title" {
+    null = false
+    type = text
   }
-  index "idx_products_name" {
-    columns = [column.name]
-  }
-}
-
-table "categories" {
-  schema = schema.public
-  column "id" {
-    type = serial
-  }
-  column "name" {
-    type = varchar(100)
-  }
-  column "slug" {
-    type = varchar(100)
-  }
-  column "parent_id" {
-    type = int
+  column "content" {
     null = true
+    type = text
   }
-  primary_key {
-    columns = [column.id]
+  column "url" {
+    null = false
+    type = text
   }
-  foreign_key "fk_categories_parent" {
-    columns     = [column.parent_id]
-    ref_columns = [column.id]
-    on_delete   = SET_NULL
-  }
-  index "idx_categories_slug" {
-    columns = [column.slug]
-    unique  = true
-  }
-}
-
-table "inventory" {
-  schema = schema.public
-  column "id" {
-    type = serial
-  }
-  column "product_id" {
-    type = int
-  }
-  column "warehouse" {
-    type = varchar(100)
-  }
-  column "quantity" {
-    type    = int
-    default = 0
-  }
-  column "updated_at" {
-    type    = timestamptz
-    default = sql("now()")
-  }
-  primary_key {
-    columns = [column.id]
-  }
-  foreign_key "fk_inventory_product" {
-    columns     = [column.product_id]
-    ref_columns = [table.products.column.id]
-    on_delete   = CASCADE
-  }
-  index "idx_inventory_product_warehouse" {
-    columns = [column.product_id, column.warehouse]
-    unique  = true
-  }
-}
-
-table "shipments" {
-  schema = schema.public
-  column "id" {
-    type = serial
-  }
-  column "order_id" {
-    type = int
-  }
-  column "carrier" {
-    type = varchar(100)
-  }
-  column "tracking_number" {
-    type = varchar(100)
+  column "author" {
     null = true
+    type = text
   }
-  column "status" {
-    type    = varchar(50)
-    default = "pending"
-  }
-  column "shipped_at" {
+  column "discovered_at" {
+    null = false
     type = timestamptz
+  }
+  column "published_at" {
     null = true
-  }
-  primary_key {
-    columns = [column.id]
-  }
-  foreign_key "fk_shipments_order" {
-    columns     = [column.order_id]
-    ref_columns = [table.orders.column.id]
-    on_delete   = CASCADE
-  }
-  index "idx_shipments_order" {
-    columns = [column.order_id]
-  }
-  index "idx_shipments_tracking" {
-    columns = [column.tracking_number]
-  }
-}
-
-table "payments" {
-  schema = schema.public
-  column "id" {
-    type = serial
-  }
-  column "order_id" {
-    type = int
-  }
-  column "amount" {
-    type = decimal(10, 2)
-  }
-  column "method" {
-    type = varchar(50)
+    type = timestamptz
   }
   column "status" {
-    type    = varchar(50)
-    default = "pending"
-  }
-  column "transaction_id" {
-    type = varchar(100)
-    null = true
+    null    = true
+    type    = text
+    default = "unread"
   }
   column "created_at" {
+    null    = true
     type    = timestamptz
     default = sql("now()")
   }
   primary_key {
     columns = [column.id]
   }
-  foreign_key "fk_payments_order" {
-    columns     = [column.order_id]
-    ref_columns = [table.orders.column.id]
-    on_delete   = CASCADE
+  index "idx_mentions_discovered_at" {
+    on {
+      desc   = true
+      column = column.discovered_at
+    }
   }
-  index "idx_payments_order" {
-    columns = [column.order_id]
-  }
-  index "idx_payments_transaction" {
-    columns = [column.transaction_id]
-    unique  = true
+  index "idx_mentions_url" {
+    columns = [column.url]
   }
 }
