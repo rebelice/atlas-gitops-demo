@@ -22,7 +22,7 @@ jobs:
 
       - name: Push Schema to Registry
         run: |
-          echo "### Deployment ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "### Release ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           atlas schema push --env ci --tag ${{ github.ref_name }}
           echo "📦 Schema pushed with tag: **${{ github.ref_name }}**" >> $GITHUB_STEP_SUMMARY
@@ -39,19 +39,52 @@ jobs:
         env:
           ATLAS_CLOUD_TOKEN: ${{ secrets.ATLAS_CLOUD_TOKEN }}
 
-      - name: Staging Deploy Summary
-        if: success()
+      - name: Staging Summary
         run: |
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## ✅ Staging Deployment Complete" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Next Steps:**" >> $GITHUB_STEP_SUMMARY
-          echo "1. Test the changes in staging environment" >> $GITHUB_STEP_SUMMARY
-          echo "2. When ready, approve the production deployment" >> $GITHUB_STEP_SUMMARY
+          echo "## ✅ Stage 1: Staging Deployed" >> $GITHUB_STEP_SUMMARY
+          echo "Schema changes have been applied to staging environment." >> $GITHUB_STEP_SUMMARY
 
-  # Stage 2: Deploy to Production (Requires Approval)
-  production:
+  # Stage 2: Generate Production Plan (Automatic)
+  prod-plan:
     needs: staging
+    runs-on: ubuntu-latest
+    outputs:
+      plan: ${{ steps.plan.outputs.plan }}
+      link: ${{ steps.plan.outputs.link }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Atlas
+        uses: ariga/setup-atlas@v0
+        with:
+          cloud-token: ${{ secrets.ATLAS_CLOUD_TOKEN }}
+
+      - name: Generate Production Plan
+        id: plan
+        uses: ariga/atlas-action/schema/plan@v1
+        with:
+          from: ${{ secrets.PROD_DB_URL }}?search_path=public
+          to: atlas://app?tag=${{ github.ref_name }}
+          dev-url: docker://postgres/15/dev?search_path=public
+          config: file://atlas.hcl
+          env: ci
+          name: release-${{ github.ref_name }}
+        env:
+          ATLAS_CLOUD_TOKEN: ${{ secrets.ATLAS_CLOUD_TOKEN }}
+
+      - name: Plan Summary
+        run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 📋 Stage 2: Production Plan Generated" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Plan URL:** ${{ steps.plan.outputs.link }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Review the SQL changes above, then approve the production deployment." >> $GITHUB_STEP_SUMMARY
+
+  # Stage 3: Deploy to Production (Requires GitHub Approval)
+  production:
+    needs: prod-plan
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -62,21 +95,30 @@ jobs:
         with:
           cloud-token: ${{ secrets.ATLAS_CLOUD_TOKEN }}
 
+      - name: Approve Plan
+        uses: ariga/atlas-action/schema/plan/approve@v1
+        with:
+          from: ${{ secrets.PROD_DB_URL }}?search_path=public
+          to: atlas://app?tag=${{ github.ref_name }}
+          dev-url: docker://postgres/15/dev?search_path=public
+          config: file://atlas.hcl
+          env: ci
+        env:
+          ATLAS_CLOUD_TOKEN: ${{ secrets.ATLAS_CLOUD_TOKEN }}
+
       - name: Deploy to Production
         uses: ariga/atlas-action/schema/apply@v1
         with:
           url: ${{ secrets.PROD_DB_URL }}?search_path=public
           to: atlas://app?tag=${{ github.ref_name }}
           dev-url: docker://postgres/15/dev?search_path=public
-          lint-review: ALWAYS
         env:
           ATLAS_CLOUD_TOKEN: ${{ secrets.ATLAS_CLOUD_TOKEN }}
 
-      - name: Production Deploy Summary
-        if: success()
+      - name: Production Summary
         run: |
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## ✅ Production Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "## ✅ Stage 3: Production Deployed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Tag:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           echo "**Deployed by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
