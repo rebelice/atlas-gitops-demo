@@ -114,3 +114,75 @@ table "categories" {
     unique  = true
   }
 }
+
+table "inventory" {
+  schema = schema.public
+  column "id" {
+    type = serial
+  }
+  column "product_id" {
+    type = int
+  }
+  column "warehouse" {
+    type = varchar(100)
+  }
+  column "quantity" {
+    type    = int
+    default = 0
+  }
+  column "updated_at" {
+    type    = timestamptz
+    default = sql("now()")
+  }
+  primary_key {
+    columns = [column.id]
+  }
+  foreign_key "fk_inventory_product" {
+    columns     = [column.product_id]
+    ref_columns = [table.products.column.id]
+    on_delete   = CASCADE
+  }
+  index "idx_inventory_product_warehouse" {
+    columns = [column.product_id, column.warehouse]
+    unique  = true
+  }
+}
+
+table "shipments" {
+  schema = schema.public
+  column "id" {
+    type = serial
+  }
+  column "order_id" {
+    type = int
+  }
+  column "carrier" {
+    type = varchar(100)
+  }
+  column "tracking_number" {
+    type = varchar(100)
+    null = true
+  }
+  column "status" {
+    type    = varchar(50)
+    default = "pending"
+  }
+  column "shipped_at" {
+    type = timestamptz
+    null = true
+  }
+  primary_key {
+    columns = [column.id]
+  }
+  foreign_key "fk_shipments_order" {
+    columns     = [column.order_id]
+    ref_columns = [table.orders.column.id]
+    on_delete   = CASCADE
+  }
+  index "idx_shipments_order" {
+    columns = [column.order_id]
+  }
+  index "idx_shipments_tracking" {
+    columns = [column.tracking_number]
+  }
+}
