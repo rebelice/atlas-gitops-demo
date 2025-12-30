@@ -27,12 +27,14 @@ jobs:
           echo "### Schema Diff for ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          # Calculate diff between prod database and desired schema
+          # Calculate diff - only public schema
           DIFF_OUTPUT=$(atlas schema diff \
             --dev-url "docker://postgres/15/dev?search_path=public" \
-            --from "${{ secrets.PROD_DB_URL }}" \
+            --from "${{ secrets.PROD_DB_URL }}?search_path=public" \
             --to "file://schema.hcl" \
             2>&1) || true
+
+          echo "Diff output: $DIFF_OUTPUT"
 
           if [ -z "$DIFF_OUTPUT" ] || echo "$DIFF_OUTPUT" | grep -q "Schemas are synced"; then
             echo "has_changes=false" >> $GITHUB_OUTPUT
@@ -71,10 +73,10 @@ jobs:
           echo "**Approved by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          # Apply schema changes to production database
+          # Apply schema changes - only public schema
           atlas schema apply \
             --dev-url "docker://postgres/15/dev?search_path=public" \
-            --url "${{ secrets.PROD_DB_URL }}" \
+            --url "${{ secrets.PROD_DB_URL }}?search_path=public" \
             --to "file://schema.hcl" \
             --auto-approve
 
