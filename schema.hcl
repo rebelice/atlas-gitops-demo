@@ -136,3 +136,47 @@ table "analytics" {
     unique  = true
   }
 }
+
+table "notifications" {
+  schema = schema.public
+  column "id" {
+    null = false
+    type = serial
+  }
+  column "mention_id" {
+    null = false
+    type = text
+  }
+  column "channel" {
+    null = false
+    type = text
+  }
+  column "sent_at" {
+    null    = true
+    type    = timestamptz
+  }
+  column "status" {
+    null    = false
+    type    = text
+    default = "pending"
+  }
+  column "created_at" {
+    null    = false
+    type    = timestamptz
+    default = sql("now()")
+  }
+  primary_key {
+    columns = [column.id]
+  }
+  foreign_key "fk_notifications_mention" {
+    columns     = [column.mention_id]
+    ref_columns = [table.mentions.column.id]
+    on_delete   = CASCADE
+  }
+  index "idx_notifications_mention_id" {
+    columns = [column.mention_id]
+  }
+  index "idx_notifications_status" {
+    columns = [column.status]
+  }
+}
