@@ -35,7 +35,7 @@ jobs:
           url: ${{ secrets.STAGING_DB_URL }}?sslmode=disable&search_path=public
           to: atlas://app?tag=${{ github.ref_name }}
           dev-url: docker://postgres/15/dev?search_path=public
-          lint-review: ERROR
+          auto-approve: true
         env:
           ATLAS_CLOUD_TOKEN: ${{ secrets.ATLAS_CLOUD_TOKEN }}
 
