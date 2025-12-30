@@ -32,7 +32,7 @@ jobs:
       - name: Deploy to Staging
         uses: ariga/atlas-action/schema/apply@v1
         with:
-          url: ${{ secrets.STAGING_DB_URL }}?search_path=public
+          url: ${{ secrets.STAGING_DB_URL }}?sslmode=disable&search_path=public
           to: atlas://app?tag=${{ github.ref_name }}
           dev-url: docker://postgres/15/dev?search_path=public
           lint-review: WARNING
