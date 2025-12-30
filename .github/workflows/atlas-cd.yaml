@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   # Stage 1: Deploy to Staging (Automatic)
@@ -71,6 +72,7 @@ jobs:
           env: ci
           name: release-${{ github.ref_name }}
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ATLAS_CLOUD_TOKEN: ${{ secrets.ATLAS_CLOUD_TOKEN }}
 
       - name: Plan Summary
