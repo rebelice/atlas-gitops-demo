@@ -4,8 +4,11 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: read
+
 jobs:
-  deliver:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,7 +18,8 @@ jobs:
         with:
           cloud-token: ${{ secrets.ATLAS_CLOUD_TOKEN }}
 
-      - name: Approve Plan
+      - name: Approve Pending Plan
+        id: approve
         uses: ariga/atlas-action/schema/plan/approve@v1
         with:
           config: file://atlas.hcl
@@ -28,3 +32,4 @@ jobs:
           config: file://atlas.hcl
           env: ci
           dev-url: "docker://postgres/15/dev?search_path=public"
+          tag: ${{ github.ref_name }}
