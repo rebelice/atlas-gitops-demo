@@ -160,6 +160,11 @@ table "notifications" {
     type    = text
     default = "pending"
   }
+  column "retry_count" {
+    null    = false
+    type    = integer
+    default = 0
+  }
   column "created_at" {
     null    = false
     type    = timestamptz
