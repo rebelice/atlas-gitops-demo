@@ -6,10 +6,15 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
-  deploy:
+  # Stage 1: Generate accumulated plan
+  plan:
     runs-on: ubuntu-latest
+    outputs:
+      plan_url: ${{ steps.plan.outputs.url }}
+      has_changes: ${{ steps.plan.outputs.status }}
     steps:
       - uses: actions/checkout@v4
 
@@ -18,18 +23,70 @@ jobs:
         with:
           cloud-token: ${{ secrets.ATLAS_CLOUD_TOKEN }}
 
-      - name: Approve Pending Plan
-        id: approve
-        uses: ariga/atlas-action/schema/plan/approve@v1
-        with:
-          config: file://atlas.hcl
-          env: ci
-          dev-url: "docker://postgres/15/dev?search_path=public"
+      - name: Generate Migration Plan
+        id: plan
+        run: |
+          # Generate plan comparing Registry state vs current schema
+          PLAN_OUTPUT=$(atlas schema plan --env ci --pending 2>&1) || true
+          echo "$PLAN_OUTPUT"
 
-      - name: Push Schema
-        uses: ariga/atlas-action/schema/push@v1
+          # Check if there are changes
+          if echo "$PLAN_OUTPUT" | grep -q "No changes detected"; then
+            echo "status=no-changes" >> $GITHUB_OUTPUT
+            echo "### No Schema Changes" >> $GITHUB_STEP_SUMMARY
+            echo "The schema is already up to date with the registry." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "status=has-changes" >> $GITHUB_OUTPUT
+            # Extract plan URL if available
+            PLAN_URL=$(echo "$PLAN_OUTPUT" | grep -oP 'https://[^\s]+plans/[^\s]+' | head -1 || echo "")
+            echo "url=$PLAN_URL" >> $GITHUB_OUTPUT
+          fi
+        env:
+          ATLAS_CLOUD_TOKEN: ${{ secrets.ATLAS_CLOUD_TOKEN }}
+
+      - name: Show Plan Details
+        if: steps.plan.outputs.status == 'has-changes'
+        run: |
+          echo "### Migration Plan Generated" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Show the SQL diff
+          echo "#### Schema Changes:" >> $GITHUB_STEP_SUMMARY
+          echo '```sql' >> $GITHUB_STEP_SUMMARY
+          atlas schema diff --env ci --from "atlas://app" --to "file://schema.hcl" 2>&1 >> $GITHUB_STEP_SUMMARY || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "⏳ **Waiting for approval in the 'deploy' job...**" >> $GITHUB_STEP_SUMMARY
+        env:
+          ATLAS_CLOUD_TOKEN: ${{ secrets.ATLAS_CLOUD_TOKEN }}
+
+  # Stage 2: Deploy after approval
+  deploy:
+    needs: plan
+    if: needs.plan.outputs.has_changes == 'has-changes'
+    runs-on: ubuntu-latest
+    environment: production  # Requires manual approval
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Atlas
+        uses: ariga/setup-atlas@v0
         with:
-          config: file://atlas.hcl
-          env: ci
-          dev-url: "docker://postgres/15/dev?search_path=public"
-          tag: ${{ github.ref_name }}
+          cloud-token: ${{ secrets.ATLAS_CLOUD_TOKEN }}
+
+      - name: Approve and Push Schema
+        run: |
+          echo "### Deployment Approved" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Approved by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Push schema to registry with tag
+          atlas schema push --env ci --tag ${{ github.ref_name }}
+
+          echo "✅ Schema pushed successfully with tag: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+        env:
+          ATLAS_CLOUD_TOKEN: ${{ secrets.ATLAS_CLOUD_TOKEN }}
