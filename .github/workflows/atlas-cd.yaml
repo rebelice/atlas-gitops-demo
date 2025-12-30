@@ -8,63 +8,8 @@ permissions:
   contents: read
 
 jobs:
-  # Stage 1: Find and show the pending plan
-  plan:
-    runs-on: ubuntu-latest
-    outputs:
-      has_plan: ${{ steps.check.outputs.has_plan }}
-      plan_url: ${{ steps.check.outputs.plan_url }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Atlas
-        uses: ariga/setup-atlas@v0
-        with:
-          cloud-token: ${{ secrets.ATLAS_CLOUD_TOKEN }}
-
-      - name: Check for Pending Plan
-        id: check
-        run: |
-          echo "### Deployment Plan for ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          # Check if there's a pending plan from CI
-          PLAN_STATUS=$(atlas schema plan list --env ci --pending --format json 2>&1) || true
-
-          echo "Plan status: $PLAN_STATUS"
-
-          if echo "$PLAN_STATUS" | grep -q '"url"'; then
-            PLAN_URL=$(echo "$PLAN_STATUS" | jq -r '.[0].url // empty' 2>/dev/null || echo "")
-            if [ -n "$PLAN_URL" ]; then
-              echo "has_plan=true" >> $GITHUB_OUTPUT
-              echo "plan_url=$PLAN_URL" >> $GITHUB_OUTPUT
-              echo "✅ **Found pending plan:** [$PLAN_URL]($PLAN_URL)" >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-
-              # Show plan details
-              echo "#### Plan SQL:" >> $GITHUB_STEP_SUMMARY
-              echo '```sql' >> $GITHUB_STEP_SUMMARY
-              atlas schema plan --env ci --pending 2>&1 | head -100 >> $GITHUB_STEP_SUMMARY || true
-              echo '```' >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "⏳ **Waiting for approval to deploy...**" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "has_plan=false" >> $GITHUB_OUTPUT
-              echo "ℹ️ **No pending plan found.** Schema may already be in sync." >> $GITHUB_STEP_SUMMARY
-            fi
-          else
-            echo "has_plan=false" >> $GITHUB_OUTPUT
-            echo "ℹ️ **No pending plan found.** Schema may already be in sync." >> $GITHUB_STEP_SUMMARY
-          fi
-        env:
-          ATLAS_CLOUD_TOKEN: ${{ secrets.ATLAS_CLOUD_TOKEN }}
-
-  # Stage 2: Deploy after manual approval
   deploy:
-    needs: plan
-    if: needs.plan.outputs.has_plan == 'true'
     runs-on: ubuntu-latest
-    environment: production
     steps:
       - uses: actions/checkout@v4
 
@@ -73,123 +18,25 @@ jobs:
         with:
           cloud-token: ${{ secrets.ATLAS_CLOUD_TOKEN }}
 
-      - name: Approve Plan
-        run: |
-          echo "### Approving Plan" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          # Approve the pending plan
-          atlas schema plan approve --env ci --url "${{ needs.plan.outputs.plan_url }}" 2>&1 || \
-          atlas schema plan approve --env ci 2>&1
-
-          echo "✅ Plan approved" >> $GITHUB_STEP_SUMMARY
-        env:
-          ATLAS_CLOUD_TOKEN: ${{ secrets.ATLAS_CLOUD_TOKEN }}
-
-      - name: Apply to Production
-        run: |
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Applying to Production" >> $GITHUB_STEP_SUMMARY
-          echo "**Tag:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Approved by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          # Apply the approved plan to production
-          atlas schema apply \
-            --env prod \
-            --var "db_url=${{ secrets.PROD_DB_URL }}?search_path=public" \
-            --auto-approve
-
-          echo "✅ **Schema applied successfully!**" >> $GITHUB_STEP_SUMMARY
-        env:
-          ATLAS_CLOUD_TOKEN: ${{ secrets.ATLAS_CLOUD_TOKEN }}
-
       - name: Push Schema to Registry
+        id: schema-push
         run: |
-          atlas schema push --env ci --tag ${{ github.ref_name }}
+          echo "### Deployment for ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Push current schema to registry with tag
+          atlas schema push --env ci --tag ${{ github.ref_name }}
+
           echo "📦 Schema pushed to registry with tag: **${{ github.ref_name }}**" >> $GITHUB_STEP_SUMMARY
         env:
           ATLAS_CLOUD_TOKEN: ${{ secrets.ATLAS_CLOUD_TOKEN }}
 
-  # Stage 3: No plan available - do ad-hoc diff
-  adhoc:
-    needs: plan
-    if: needs.plan.outputs.has_plan == 'false'
-    runs-on: ubuntu-latest
-    outputs:
-      has_changes: ${{ steps.diff.outputs.has_changes }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Atlas
-        uses: ariga/setup-atlas@v0
+      - name: Apply Schema to Production
+        uses: ariga/atlas-action/schema/apply@v1
         with:
-          cloud-token: ${{ secrets.ATLAS_CLOUD_TOKEN }}
-
-      - name: Ad-hoc Schema Diff
-        id: diff
-        run: |
-          echo "### Ad-hoc Schema Diff for ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "⚠️ No pre-approved plan found. Generating ad-hoc diff..." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          DIFF_OUTPUT=$(atlas schema diff \
-            --env prod \
-            --var "db_url=${{ secrets.PROD_DB_URL }}?search_path=public" \
-            2>&1) || true
-
-          if [ -z "$DIFF_OUTPUT" ] || echo "$DIFF_OUTPUT" | grep -q "Schemas are synced"; then
-            echo "has_changes=false" >> $GITHUB_OUTPUT
-            echo "✅ **No changes needed.** Database is already in sync." >> $GITHUB_STEP_SUMMARY
-          else
-            echo "has_changes=true" >> $GITHUB_OUTPUT
-            echo "#### SQL to be executed:" >> $GITHUB_STEP_SUMMARY
-            echo '```sql' >> $GITHUB_STEP_SUMMARY
-            echo "$DIFF_OUTPUT" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "⏳ **Waiting for approval to deploy...**" >> $GITHUB_STEP_SUMMARY
-          fi
-        env:
-          ATLAS_CLOUD_TOKEN: ${{ secrets.ATLAS_CLOUD_TOKEN }}
-
-  # Stage 4: Deploy ad-hoc changes after approval
-  deploy-adhoc:
-    needs: adhoc
-    if: needs.adhoc.outputs.has_changes == 'true'
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Atlas
-        uses: ariga/setup-atlas@v0
-        with:
-          cloud-token: ${{ secrets.ATLAS_CLOUD_TOKEN }}
-
-      - name: Apply Schema to Production (Ad-hoc)
-        run: |
-          echo "### Ad-hoc Deployment to Production" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Tag:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Approved by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          atlas schema apply \
-            --env prod \
-            --var "db_url=${{ secrets.PROD_DB_URL }}?search_path=public" \
-            --auto-approve
-
-          echo "✅ **Schema applied successfully!**" >> $GITHUB_STEP_SUMMARY
-        env:
-          ATLAS_CLOUD_TOKEN: ${{ secrets.ATLAS_CLOUD_TOKEN }}
-
-      - name: Push Schema to Registry
-        run: |
-          atlas schema push --env ci --tag ${{ github.ref_name }}
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "📦 Schema pushed to registry with tag: **${{ github.ref_name }}**" >> $GITHUB_STEP_SUMMARY
+          url: ${{ secrets.PROD_DB_URL }}?search_path=public
+          to: atlas://app?tag=${{ github.ref_name }}
+          dev-url: docker://postgres/15/dev?search_path=public
+          lint-review: ALWAYS
         env:
           ATLAS_CLOUD_TOKEN: ${{ secrets.ATLAS_CLOUD_TOKEN }}
