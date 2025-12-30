@@ -51,6 +51,12 @@ env "prod" {
     skip {
       drop_schema = true
       drop_table  = true
+      drop_column = true
     }
   }
+
+  exclude = [
+    "atlas_schema_revisions",
+    "supabase_*",
+  ]
 }

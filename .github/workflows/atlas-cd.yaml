@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 jobs:
-  # Stage 1: Generate accumulated plan and show diff
+  # Stage 1: Generate plan and show diff
   plan:
     runs-on: ubuntu-latest
     outputs:
@@ -27,14 +27,15 @@ jobs:
           echo "### Schema Diff for ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          # Calculate diff - only public schema
+          # Use --env prod to apply diff.skip settings from atlas.hcl
+          # This prevents DROP operations per the config
           DIFF_OUTPUT=$(atlas schema diff \
-            --dev-url "docker://postgres/15/dev?search_path=public" \
-            --from "${{ secrets.PROD_DB_URL }}?search_path=public" \
-            --to "file://schema.hcl" \
+            --env prod \
+            --var "db_url=${{ secrets.PROD_DB_URL }}?search_path=public" \
             2>&1) || true
 
-          echo "Diff output: $DIFF_OUTPUT"
+          echo "Diff output:"
+          echo "$DIFF_OUTPUT"
 
           if [ -z "$DIFF_OUTPUT" ] || echo "$DIFF_OUTPUT" | grep -q "Schemas are synced"; then
             echo "has_changes=false" >> $GITHUB_OUTPUT
@@ -73,11 +74,10 @@ jobs:
           echo "**Approved by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          # Apply schema changes - only public schema
+          # Apply using --env prod (inherits diff.skip settings)
           atlas schema apply \
-            --dev-url "docker://postgres/15/dev?search_path=public" \
-            --url "${{ secrets.PROD_DB_URL }}?search_path=public" \
-            --to "file://schema.hcl" \
+            --env prod \
+            --var "db_url=${{ secrets.PROD_DB_URL }}?search_path=public" \
             --auto-approve
 
           echo "✅ **Schema applied successfully!**" >> $GITHUB_STEP_SUMMARY
@@ -86,7 +86,6 @@ jobs:
 
       - name: Push Schema to Registry
         run: |
-          # Update registry with the new schema state
           atlas schema push --env ci --tag ${{ github.ref_name }}
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "📦 Schema pushed to registry with tag: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
