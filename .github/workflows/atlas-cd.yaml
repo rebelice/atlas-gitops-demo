@@ -1,11 +1,8 @@
 name: Atlas CD
 on:
   push:
-    branches:
-      - main
-    paths:
-      - 'schema.hcl'
-      - 'atlas.hcl'
+    tags:
+      - 'v*'
 
 jobs:
   deliver:
