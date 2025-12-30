@@ -1,0 +1,85 @@
+name: Atlas Drift Detection
+on:
+  schedule:
+    # Run daily at 9:00 AM UTC
+    - cron: '0 9 * * *'
+  workflow_dispatch:  # Allow manual trigger
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  drift-detection:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Atlas
+        uses: ariga/setup-atlas@v0
+        with:
+          cloud-token: ${{ secrets.ATLAS_CLOUD_TOKEN }}
+
+      - name: Detect Schema Drift
+        id: drift
+        run: |
+          echo "### Drift Detection Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Time:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Compare production DB against the latest schema in Registry
+          DRIFT_OUTPUT=$(atlas schema diff \
+            --env prod \
+            --var "db_url=${{ secrets.PROD_DB_URL }}?search_path=public" \
+            --from "${{ secrets.PROD_DB_URL }}?search_path=public" \
+            --to "atlas://app" \
+            --dev-url "docker://postgres/15/dev?search_path=public" \
+            2>&1) || true
+
+          echo "Drift check output:"
+          echo "$DRIFT_OUTPUT"
+
+          if [ -z "$DRIFT_OUTPUT" ] || echo "$DRIFT_OUTPUT" | grep -q "Schemas are synced"; then
+            echo "has_drift=false" >> $GITHUB_OUTPUT
+            echo "✅ **No drift detected.** Production database matches Registry." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "has_drift=true" >> $GITHUB_OUTPUT
+            echo "⚠️ **Drift detected!** Production database has diverged from Registry." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "#### Differences:" >> $GITHUB_STEP_SUMMARY
+            echo '```sql' >> $GITHUB_STEP_SUMMARY
+            echo "$DRIFT_OUTPUT" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+        env:
+          ATLAS_CLOUD_TOKEN: ${{ secrets.ATLAS_CLOUD_TOKEN }}
+
+      - name: Create Issue on Drift
+        if: steps.drift.outputs.has_drift == 'true'
+        run: |
+          gh issue create \
+            --title "🚨 Schema Drift Detected - $(date -u '+%Y-%m-%d')" \
+            --body "## Schema Drift Alert
+
+Production database schema has diverged from the expected state in Atlas Registry.
+
+**Detection Time:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+
+### Action Required
+1. Review the drift in the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+2. Determine if this was an authorized change
+3. Either:
+   - Update schema.hcl to reflect the change, or
+   - Revert the unauthorized database change
+
+### Possible Causes
+- Manual database changes
+- Direct SQL execution
+- Another deployment system
+- Migration from another tool
+
+cc @${{ github.repository_owner }}" \
+            --label "drift,database,urgent"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

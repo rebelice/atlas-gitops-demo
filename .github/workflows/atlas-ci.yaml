@@ -20,7 +20,8 @@ jobs:
         with:
           cloud-token: ${{ secrets.ATLAS_CLOUD_TOKEN }}
 
-      - name: Schema Plan
+      # Generate plan comparing Registry (current prod state) vs PR schema
+      - name: Generate Schema Plan
         uses: ariga/atlas-action/schema/plan@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
