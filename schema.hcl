@@ -186,3 +186,46 @@ table "shipments" {
     columns = [column.tracking_number]
   }
 }
+
+table "payments" {
+  schema = schema.public
+  column "id" {
+    type = serial
+  }
+  column "order_id" {
+    type = int
+  }
+  column "amount" {
+    type = decimal(10, 2)
+  }
+  column "method" {
+    type = varchar(50)
+  }
+  column "status" {
+    type    = varchar(50)
+    default = "pending"
+  }
+  column "transaction_id" {
+    type = varchar(100)
+    null = true
+  }
+  column "created_at" {
+    type    = timestamptz
+    default = sql("now()")
+  }
+  primary_key {
+    columns = [column.id]
+  }
+  foreign_key "fk_payments_order" {
+    columns     = [column.order_id]
+    ref_columns = [table.orders.column.id]
+    on_delete   = CASCADE
+  }
+  index "idx_payments_order" {
+    columns = [column.order_id]
+  }
+  index "idx_payments_transaction" {
+    columns = [column.transaction_id]
+    unique  = true
+  }
+}
