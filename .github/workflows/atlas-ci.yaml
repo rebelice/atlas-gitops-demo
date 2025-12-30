@@ -23,6 +23,6 @@ jobs:
       - name: Schema Plan
         uses: ariga/atlas-action/schema/plan@v1
         with:
-          config: atlas.hcl
+          config: file://atlas.hcl
           env: ci
           dev-url: "docker://postgres/15/dev?search_path=public"
