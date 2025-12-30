@@ -10,10 +10,10 @@ env "local" {
 }
 
 env "ci" {
-  src = "file://schema.hcl"
   dev = "docker://postgres/15/dev?search_path=public"
 
   schema {
+    src = "file://schema.hcl"
     repo {
       name = "app"
     }
@@ -29,10 +29,11 @@ env "ci" {
 }
 
 env "production" {
-  src = "file://schema.hcl"
   url = var.db_url
+  dev = "docker://postgres/15/dev?search_path=public"
 
   schema {
+    src = "file://schema.hcl"
     repo {
       name = "app"
     }
